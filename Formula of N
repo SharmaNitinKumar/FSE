@@ -1,0 +1,209 @@
+#include <stdio.h>
+#include <time.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <x86intrin.h>
+#include <math.h>
+
+#define rotateleft(x, n) (((x) << (n)) ^ ((x) >> (8 - n)))
+#define rotateright(x, n) (((x) >> (n)) ^ ((x) << (8 - n)))
+
+#define update(a, b, n) ((rotateleft((a) ^ (b), (n))))
+
+void qr(unsigned char *x0, unsigned char *x1, unsigned char *x2, unsigned char *x3)
+{
+    unsigned char z0, z1, z2, z3;
+
+    z0 = (*x0 + *x1) % 256;
+    z3 = update(*x3, z0, 4);
+    z2 = (*x2 + z3) % 256;
+    z1 = update(*x1, z2, 3);
+    z0 = (z0 + z1) % 256;
+    z3 = update(z3, z0, 2);
+    z2 = (z2 + z3) % 256;
+    z1 = update(z1, z2, 1);
+
+    *x0 = z0, *x1 = z1, *x2 = z2, *x3 = z3;
+}
+
+void roundodd(unsigned char *x)
+{
+    qr(&(x[0]), &(x[4]), &(x[8]), &(x[12]));
+    qr(&(x[1]), &(x[5]), &(x[9]), &(x[13]));
+    qr(&(x[2]), &(x[6]), &(x[10]), &(x[14]));
+    qr(&(x[3]), &(x[7]), &(x[11]), &(x[15]));
+}
+
+void roundeven(unsigned char *x)
+{
+    qr(&(x[0]), &(x[5]), &(x[10]), &(x[15]));
+    qr(&(x[1]), &(x[6]), &(x[11]), &(x[12]));
+    qr(&(x[2]), &(x[7]), &(x[8]), &(x[13]));
+    qr(&(x[3]), &(x[4]), &(x[9]), &(x[14]));
+}
+
+void inqr(unsigned char *x0, unsigned char *x1, unsigned char *x2, unsigned char *x3)
+{
+    unsigned char p, q, r, s;
+
+    p = *x0, q = *x1, r = *x2, s = *x3;
+
+    q = rotateright(q, 1);
+    q ^= r;
+    r -= s;
+    s = rotateright(s, 2);
+    s ^= p;
+    p -= q;
+    q = rotateright(q, 3);
+    q ^= r;
+    r -= s;
+    s = rotateright(s, 4);
+    s ^= p;
+    p -= q;
+
+    *x0 = p, *x1 = q, *x2 = r, *x3 = s;
+}
+
+void inroundodd(unsigned char *x)
+{
+    inqr(&(x[3]), &(x[7]), &(x[11]), &(x[15]));
+    inqr(&(x[2]), &(x[6]), &(x[10]), &(x[14]));
+    inqr(&(x[1]), &(x[5]), &(x[9]), &(x[13]));
+    inqr(&(x[0]), &(x[4]), &(x[8]), &(x[12]));
+}
+
+int main()
+{
+
+    unsigned char x[16], x1[16], i, x0[16], x00[16], x01[16], z[16], z1[16];
+    srand48(time(NULL));
+
+    int val = 0, val1 = 0, count = 0, false_1 = 0;
+
+    for (count = 1; count <= 1048576; count++)
+    {
+
+        val = 0;
+
+        while (1)
+        {
+
+            x[0] = 0x65;
+            x[1] = 0x6e;
+            x[2] = 0x32;
+            x[3] = 0x74;
+
+            for (i = 4; i < 16; i++)
+                x[i] = 256.0 * drand48();
+
+            for (i = 0; i < 16; i++)
+            {
+                x1[i] = x[i];
+                x0[i] = x[i];
+                x00[i] = x[i];
+            }
+
+            x1[13] = x1[13] ^ 0x1;
+            roundodd(x);
+            roundodd(x1);
+
+            int MISS_MATCH_1 = 0;
+
+            for (int k = 1; k < 16; k = k + 4)
+            {
+                int pt = 0x80;
+                for (int j = 15; j >= 0; j--)
+                {
+                    if (((x[k] ^ x1[k]) & pt) != 0)
+                        MISS_MATCH_1++;
+                    pt = pt >> 1;
+                }
+            }
+
+            // break;
+            if (MISS_MATCH_1 == 10)
+                break;
+        }
+
+        for (int number = 0; number < 102; number++)
+        {
+
+            x00[12] = drand48() * 256;
+
+            x00[14] = drand48() * 256;
+
+            x00[15] = drand48() * 256;
+
+            if (drand48() < 0.5)
+                x00[13] = x00[13] ^ (0x1 << 1);
+
+            if (drand48() < 0.5)
+                x00[13] = x00[13] ^ (0x1 << 3);
+
+            for (i = 0; i < 16; i++)
+            {
+                x0[i] = x00[i];
+                x[i] = x00[i];
+                x1[i] = x00[i];
+            }
+
+            x1[13] = x1[13] ^ 0x1;
+
+            for (i = 0; i < 16; i++)
+                x01[i] = x1[i];
+
+            roundodd(x);
+            roundodd(x1);
+
+            roundeven(x);
+            roundeven(x1);
+
+            roundodd(x);
+            roundodd(x1);
+
+            for (i = 0; i < 16; i++)
+            {
+
+                z[i] = x[i] + x0[i];
+                z1[i] = x1[i] + x01[i];
+            }
+
+            for (i = 0; i < 64; i++)
+            {
+
+                // These are Non-PNBs
+                if (i >= 40 && i <= 47)
+                    continue;
+
+                int aa = i / 8, bb = i % 8;
+
+                if (drand48() < 0.5)
+                {
+                    x0[aa] = x0[aa] ^ (0x1 << bb);
+                    x01[aa] = x01[aa] ^ (0x1 << bb);
+                }
+            }
+
+            for (i = 0; i < 16; i++)
+            {
+                x[i] = z[i] + (256 - (x0[i]));
+                x1[i] = z1[i] + (256 - (x01[i]));
+            }
+
+            inroundodd(x);
+            inroundodd(x1);
+
+            unsigned char BACK = x[1] ^ x1[1];
+
+            BACK = BACK >> 6;
+
+            if (BACK % 2 == 1)
+                val++;
+        }
+
+        if (val < 89)
+            false_1++;
+
+        printf("%d   %d    %d\n", val, count, false_1);
+    }
+}
