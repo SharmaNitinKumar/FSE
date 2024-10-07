@@ -181,8 +181,6 @@ int main()
     ul loop = 0;
     double cnt = 0;
 
-    
-
     initial(x);
 
     while (loop < 1024 * 1024*256 )
